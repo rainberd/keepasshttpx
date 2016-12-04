@@ -5,6 +5,7 @@ This is a fork of KeePassHttp plugin adjusted to support Wine on macOS and Linux
 # Installation
 
 You can download KeePass 2.34 for macOS already bundled with KeePassHttpX from here: [part 1](https://raw.github.com/sazonov/keepasshttpx/master/release/KeePass.7z.001), [part 2](https://raw.github.com/sazonov/keepasshttpx/master/release/KeePass.7z.002).
+
 Manual installation is not so hard and takes 15-30 minutes. You can find all necessary steps down below.
 
 Please let me know if you're facing some troubles with installation.
