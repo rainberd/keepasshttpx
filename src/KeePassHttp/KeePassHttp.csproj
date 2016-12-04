@@ -32,12 +32,18 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Griffin.Networking">
+      <HintPath>lib\Griffin.Networking.dll</HintPath>
+    </Reference>
+    <Reference Include="Griffin.Networking.Protocol.Http">
+      <HintPath>lib\Griffin.Networking.Protocol.Http.dll</HintPath>
+    </Reference>
     <Reference Include="KeePass">
       <HintPath>C:\Program Files (x86)\KeePass Password Safe 2\KeePass.exe</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Newtonsoft.Json">
-      <HintPath>.\Newtonsoft.Json.dll</HintPath>
+      <HintPath>lib\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -55,6 +61,7 @@
     <Compile Include="AccessControlForm.Designer.cs">
       <DependentUpon>AccessControlForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="HttpService.cs" />
     <Compile Include="ConfigOpt.cs" />
     <Compile Include="OptionsForm.cs">
       <SubType>Form</SubType>
@@ -98,6 +105,7 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <None Include="packages.config" />
     <None Include="Resources\earth_lock.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

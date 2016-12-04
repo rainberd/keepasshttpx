@@ -1,3 +1,4 @@
+.DS_Store
 *.swp
 *.suo
 obj
@@ -7,4 +8,4 @@ create-plgx.bat
 *.cer
 *.pvk
 *.csproj.user
-/KeePassHttp/KeePassHttp.dll
+/src/KeePassHttp/KeePassHttp.dll

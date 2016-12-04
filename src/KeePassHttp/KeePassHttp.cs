@@ -1,24 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Net;
 using System.Windows.Forms;
-using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using System.Security.Cryptography;
 
 using KeePass.Plugins;
 using KeePass.UI;
 using KeePassLib;
-using KeePassLib.Collections;
 using KeePassLib.Security;
 
 using Newtonsoft.Json;
 using KeePass.Util.Spr;
-using KeePassLib.Serialization;
-using System.Resources;
+using Griffin.Networking.Protocol.Http;
+using Griffin.Networking.Protocol.Http.Protocol;
+using Griffin.Networking.Messaging;
 
 namespace KeePassHttp
 {
@@ -27,7 +24,6 @@ namespace KeePassHttp
     public enum CMode { ENCRYPT, DECRYPT }
     public sealed partial class KeePassHttpExt : Plugin
     {
-
         /// <summary>
         /// an arbitrarily generated uuid for the keepasshttp root entry
         /// </summary>
@@ -41,7 +37,7 @@ namespace KeePassHttp
         private const string KEEPASSHTTP_GROUP_NAME = "KeePassHttp Passwords";
         public const string ASSOCIATE_KEY_PREFIX = "AES Key: ";
         private IPluginHost host;
-        private HttpListener listener;
+        private MessagingServer server;
         public const int DEFAULT_PORT = 19455;
         public const string DEFAULT_HOST = "localhost";
         /// <summary>
@@ -50,12 +46,11 @@ namespace KeePassHttp
         private const string HTTP_SCHEME = "http://";
         //private const string HTTPS_PREFIX = "https://localhost:";
         //private int HTTPS_PORT = DEFAULT_PORT + 1;
-        private Thread httpThread;
         private volatile bool stopped = false;
         Dictionary<string, RequestHandler> handlers = new Dictionary<string, RequestHandler>();
 
         //public string UpdateUrl = "";
-        public override string UpdateUrl { get { return "https://passifox.appspot.com/kph/latest-version.txt"; } }
+        //public override string UpdateUrl { get { return "https://passifox.appspot.com/kph/latest-version.txt"; } }
 
         private SearchParameters MakeSearchParameters()
         {
@@ -176,7 +171,6 @@ namespace KeePassHttp
 
         public override bool Initialize(IPluginHost host)
         {
-            var httpSupported = HttpListener.IsSupported;
             this.host = host;
 
             var optionsMenu = new ToolStripMenuItem("KeePassHttp Options...");
@@ -185,73 +179,38 @@ namespace KeePassHttp
             //optionsMenu.Image = global::KeePass.Properties.Resources.B16x16_File_Close;
             this.host.MainWindow.ToolsMenu.DropDownItems.Add(optionsMenu);
 
-            if (httpSupported)
+            try
             {
-                try
-                {
-                    handlers.Add(Request.TEST_ASSOCIATE, TestAssociateHandler);
-                    handlers.Add(Request.ASSOCIATE, AssociateHandler);
-                    handlers.Add(Request.GET_LOGINS, GetLoginsHandler);
-                    handlers.Add(Request.GET_LOGINS_COUNT, GetLoginsCountHandler);
-                    handlers.Add(Request.GET_ALL_LOGINS, GetAllLoginsHandler);
-                    handlers.Add(Request.SET_LOGIN, SetLoginHandler);
-                    handlers.Add(Request.GENERATE_PASSWORD, GeneratePassword);
+                handlers.Add(Request.TEST_ASSOCIATE, TestAssociateHandler);
+                handlers.Add(Request.ASSOCIATE, AssociateHandler);
+                handlers.Add(Request.GET_LOGINS, GetLoginsHandler);
+                handlers.Add(Request.GET_LOGINS_COUNT, GetLoginsCountHandler);
+                handlers.Add(Request.GET_ALL_LOGINS, GetAllLoginsHandler);
+                handlers.Add(Request.SET_LOGIN, SetLoginHandler);
+                handlers.Add(Request.GENERATE_PASSWORD, GeneratePassword);
 
-                    listener = new HttpListener();
+                var configOpt = new ConfigOpt(this.host.CustomConfig);
 
-                    var configOpt = new ConfigOpt(this.host.CustomConfig);
-
-                    listener.Prefixes.Add(HTTP_SCHEME + configOpt.ListenerHost + ":" + configOpt.ListenerPort.ToString() + "/");
-                    //listener.Prefixes.Add(HTTPS_PREFIX + HTTPS_PORT + "/");
-                    listener.Start();
-
-                    httpThread = new Thread(new ThreadStart(Run));
-                    httpThread.Start();
-                } catch (HttpListenerException e) {
-                    MessageBox.Show(host.MainWindow,
-                        "Unable to start HttpListener!\nDo you really have only one installation of KeePassHttp in your KeePass-directory?\n\n" + e,
-                        "Unable to start HttpListener",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
-                }
+                server = new MessagingServer(new KeePassHttpServiceFactory(_RequestHandler), new MessagingServerConfiguration(new HttpMessageFactory()));
+                server.Start(new IPEndPoint(DEFAULT_HOST.Equals(configOpt.ListenerHost) ? IPAddress.Loopback : IPAddress.Parse(configOpt.ListenerHost), Convert.ToInt32(configOpt.ListenerPort)));
             }
-            else
+            catch (Exception e)
             {
-                MessageBox.Show(host.MainWindow, "The .NET HttpListener is not supported on your OS",
-                        ".NET HttpListener not supported",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
+                MessageBox.Show(host.MainWindow,
+                    "Unable to start HttpListener!\nDo you really have only one installation of KeePassHttp in your KeePass-directory?\n\n" + e,
+                    "Unable to start HttpListener",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
             }
-            return httpSupported;
+
+            return true;
         }
 
         void OnOptions_Click(object sender, EventArgs e)
         {
             var form = new OptionsForm(new ConfigOpt(host.CustomConfig));
             UIUtil.ShowDialogAndDestroy(form);
-        }
-
-        private void Run()
-        {
-            while (!stopped)
-            {
-                try
-                {
-                    var r = listener.BeginGetContext(new AsyncCallback(RequestHandler), listener);
-                    r.AsyncWaitHandle.WaitOne();
-                    r.AsyncWaitHandle.Close();
-                }
-                catch (ThreadInterruptedException) { }
-                catch (HttpListenerException e) {
-                    MessageBox.Show(host.MainWindow, "Unable to process request!\n\n" + e,
-                        "Unable to process request",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
-                }
-            }
         }
 
         private JsonSerializer NewJsonSerializer()
@@ -262,7 +221,7 @@ namespace KeePassHttp
 
             return JsonSerializer.Create(settings);
         }
-        private Response ProcessRequest(Request r, HttpListenerResponse resp)
+        private Response ProcessRequest(Request r, IResponse resp)
         {
             string hash = host.Database.RootGroup.Uuid.ToHexString() + host.Database.RecycleBinUuid.ToHexString();
             hash = getSHA1(hash);
@@ -296,27 +255,16 @@ namespace KeePassHttp
 
             return response;
         }
-        private void RequestHandler(IAsyncResult r) 
-        {
-            try {
-                _RequestHandler(r);
-            } catch (Exception e) {
-                MessageBox.Show(host.MainWindow, "RequestHandler failed: " + e);
-            }
-        }
-        private void _RequestHandler(IAsyncResult r)
+
+        private void _RequestHandler(IRequest req, IResponse resp)
         {
             if (stopped) return;
-            var l    = (HttpListener)r.AsyncState;
-            var ctx  = l.EndGetContext(r);
-            var req  = ctx.Request;
-            var resp = ctx.Response;
 
             var serializer = NewJsonSerializer();
             Request request = null;
 
             resp.StatusCode = (int)HttpStatusCode.OK;
-            using (var ins = new JsonTextReader(new StreamReader(req.InputStream)))
+            using (var ins = new JsonTextReader(new StreamReader(req.Body)))
             {
                 try
                 {
@@ -326,8 +274,8 @@ namespace KeePassHttp
                 {
                     var buffer = Encoding.UTF8.GetBytes(e + "");
                     resp.StatusCode = (int)HttpStatusCode.BadRequest;
-                    resp.ContentLength64 = buffer.Length;
-                    resp.OutputStream.Write(buffer, 0, buffer.Length);
+                    resp.ContentLength = buffer.Length;
+                    resp.Body.Write(buffer, 0, buffer.Length);
                 } // ignore, bad request
             }
 
@@ -365,26 +313,21 @@ namespace KeePassHttp
                 {
                     serializer.Serialize(writer, response);
                     var buffer = Encoding.UTF8.GetBytes(writer.ToString());
-                    resp.ContentLength64 = buffer.Length;
-                    resp.OutputStream.Write(buffer, 0, buffer.Length);
+                    resp.ContentLength = buffer.Length;
+                    resp.Body.Write(buffer, 0, buffer.Length);
                 }
             }
             else
             {
                 resp.StatusCode = (int)HttpStatusCode.ServiceUnavailable;
             }
-
-            var outs = resp.OutputStream;
-            outs.Close();
-            resp.Close();
         }
 
         public override void Terminate()
         {
             stopped = true;
-            listener.Stop();
-            listener.Close();
-            httpThread.Interrupt();
+
+            server.Stop();
         }
 
         private void UpdateUI(PwGroup group)
