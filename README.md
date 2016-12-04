@@ -19,3 +19,4 @@ This is fork of KeePassHttp plugin adjusted to support Wine on macOS and Linux.
 2. Open KeePass wrapper contents in Finder and go to `drive_c/Program Files/KeePass Password Safe 2/Plugins`.
 3. Copy `KeePassHttpX.plgx` to `Plugins` directory.
 4. Run KeePass.
+5. Wine has some issues with tray icons and popup notifications so we need to disable questions on access to new db entries via KeePassHttp. Go to `Tools -> KeePassHttp Options` and set `Always allow access to entries` on `Advanced` tab.
