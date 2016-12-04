@@ -1,8 +1,13 @@
 # KeePassHttpX
 
-This is fork of KeePassHttp plugin adjusted to support Wine on macOS and Linux.
+This is a fork of KeePassHttp plugin adjusted to support Wine on macOS and Linux.
 
 # Installation
+
+You can download KeePass 2.34 for macOS already bundled with KeePassHttpX from [here](https://raw.github.com/sazonov/keepasshttpx/master/release/KeePass.7z).
+Manual installation is not so hard and takes 15-30 minutes. You can find all necessary steps down below.
+
+Please let me know if you're facing some troubles with installation.
 
 ## KeePass (macOS)
 
@@ -12,7 +17,7 @@ This is fork of KeePassHttp plugin adjusted to support Wine on macOS and Linux.
 4. Open created wrapper settings and go to `Screen Options`. Mark `Use Mac Driver instead of X11`. Click `Done`.
 5. Next go to `Tools` tab and click on `Winetricks`. Install `msxml3` and `dotnet40` tricks. Close this window.
 6. Click on `Install Software` and install KeePass.
-7. Done! Now you have properly installed KeePass on Wine that runs nice and smoothly with no crappy Mono and X11 emulation.
+7. Done! Now you have properly installed KeePass on Wine that runs nice and smoothly with no crappy Mono emulation and X11.
 
 ## KeePassHttpX (macOS)
 1. Download [KeePassHttpX](https://raw.github.com/sazonov/keepasshttpx/master/release/KeePassHttpX.plgx).
