@@ -1,6 +1,6 @@
 # KeePassHttpX
 
-This is a fork of KeePassHttp plugin adjusted to support Wine on macOS and Linux.
+This is a fork of KeePassHttp plugin adjusted to support Wine on macOS and Linux. If you have any questions, please contact me: sergey.s.sazonov@gmail.com.
 
 # Installation
 
