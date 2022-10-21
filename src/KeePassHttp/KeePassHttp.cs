@@ -5,7 +5,7 @@ using System.Text;
 using System.Net;
 using System.Windows.Forms;
 using System.Security.Cryptography;
-
+using System.Threading.Tasks;
 using KeePass.Plugins;
 using KeePass.UI;
 using KeePassLib;
@@ -51,6 +51,8 @@ namespace KeePassHttp
 
         //public string UpdateUrl = "";
         //public override string UpdateUrl { get { return "https://passifox.appspot.com/kph/latest-version.txt"; } }
+        
+        private readonly object _unlockOnActivitySyncRoot = new object();
 
         private SearchParameters MakeSearchParameters()
         {
@@ -283,21 +285,33 @@ namespace KeePassHttp
 
             var configOpt = new ConfigOpt(this.host.CustomConfig);
 
-            if (request != null && (configOpt.UnlockDatabaseRequest || request.TriggerUnlock == "true") && !db.IsOpen)
-            {
-                host.MainWindow.Invoke((MethodInvoker)delegate
-                {
-                    host.MainWindow.EnsureVisibleForegroundWindow(true, true);
-                });
+            if (request != null && (configOpt.UnlockDatabaseRequest || request.TriggerUnlock == "true") && !db.IsOpen) {
+                var checkMainThreadAvailabilityTask = Task.Run(() =>
+                        host.MainWindow.Invoke((Action)(() => {
+                            /* don't do anything - we are just seeing if the thread is blocked */
+                        })));
 
-                // UnlockDialog not already opened
-                bool bNoDialogOpened = (KeePass.UI.GlobalWindowManager.WindowCount == 0);
-                if (!db.IsOpen && bNoDialogOpened)
-                {
-                    host.MainWindow.Invoke((MethodInvoker)delegate
-                    {
-                        host.MainWindow.OpenDatabase(host.MainWindow.DocumentManager.ActiveDocument.LockedIoc, null, false);
-                    });
+                if (!checkMainThreadAvailabilityTask.Wait(1000)) {
+                    return; // the main thread seems to be locked, it would be safe not to try unlocking databases
+                    // ↑ For more details, see #19 "KeePass Locks Up in combination of IOProtocolExt and KeyAgent when trying to Synchronise a database"
+                }
+
+                lock (_unlockOnActivitySyncRoot) {
+                    // ↑ protection from concurrent requests
+
+                    host.MainWindow.Invoke((Action)(() => {
+                        var document = host.MainWindow.DocumentManager.ActiveDocument;
+                        if (host.MainWindow.IsFileLocked(document)) {
+                            host.MainWindow.OpenDatabase(document.LockedIoc, null, false);
+                        }
+                        /*
+                        foreach (var document in host.MainWindow.DocumentManager.Documents) {
+                            if (host.MainWindow.IsFileLocked(document)) {
+                                host.MainWindow.OpenDatabase(document.LockedIoc, null, false);
+                            }
+                        }
+                        */
+                    }));
                 }
             }
 
